@@ -8,7 +8,7 @@ import { AppService } from './app.service.js';
 import { BookingsService } from './bookings/bookings.service.js';
 @Module({
   imports: [ConfigModule.forRoot(), BookingsModule, PrismaModule],
-  controllers: [AppController, BookingsController],
-  providers: [AppService, BookingsService],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
