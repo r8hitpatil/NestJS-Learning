@@ -1,18 +1,29 @@
-import { Module } from '@nestjs/common';
+import { DynamicModule, Module } from '@nestjs/common';
 import { RedisService } from './redis.service';
-import { RedisController } from './redis.controller';
 import { createClient } from 'redis';
+import { RedisAsyncOptions } from './types/redis.async.type';
+import { REDIS_CLIENT } from './types/redis.contant';
 
-@Module({
-  providers: [{
-    provide : 'REDIS_CLIENT',
-    useFactory : async() => {
-      const client = createClient({ url : process.env.REDIS_URL });
-      await client.connect(); // here the whole app waits
-      return client;
+@Module({})
+export class RedisModule {
+  static forRootAsync(options:RedisAsyncOptions):DynamicModule {
+    return {
+      global : true,
+      module : RedisModule,
+      imports : options.imports || [],
+      providers : [{
+        provide : REDIS_CLIENT,
+        useFactory : async (...args) => {
+          const url = await options.useFactory(...args);
+          const client = createClient({ url });
+          await client.connect();
+          return client;
+        },
+        inject : options.inject || [],
+      },
+      RedisService,
+    ],
+      exports : [RedisService],
     }
-  }],
-  controllers: [RedisController],
-  exports: ['REDIS_CLIENT']
-})
-export class RedisModule {}
+  }
+}
