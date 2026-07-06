@@ -301,3 +301,68 @@ async function bootstrap() {
 }
 bootstrap();
 ```
+
+#### Do we have to write the code block that heavy ? NO
+
+NestJS takes care of our developers by giving some hand about building a module builder
+
+Step 1 : Define your definition for your provider in separate file which would have info about what module options like url , token , etc.. in what format as well and then we would need ConfigModuleClass that is for extending out module ( provider ) which would give our module necessary stuff of providing , injecting behind the scenes no need to write more code in providers
+
+Ex: For stripe module we created stripe.module-definition.ts
+```
+
+export interface StripeModuleOptions{
+    apiKey: string;
+}
+
+export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } = (
+    new ConfigurableModuleBuilder<StripeModuleOptions>()
+    .setClassMethodName('forRoot')
+    .build()
+)
+```
+
+Thus our module configurations we need is almost just few lines of code , extend our module ( provider ) with ConfigModuleClass
+
+Step 2 : Pass the necessary params to connect your service you need
+
+In our service of our provider we inject to get the necessary tokens for building a connection
+```
+
+@Injectable()
+export class StripeService {
+  private stripeClient: Stripe;
+
+  constructor(@Inject(MODULE_OPTIONS_TOKEN) private options: StripeModuleOptions) {
+    
+    this.stripeClient = new Stripe(this.options.apiKey, {
+      apiVersion: '2026-06-24.dahlia',
+    });
+  }
+}
+```
+
+Extending the ConfigModuleClass to enable the ConfigBuilder
+
+```
+
+@Module({
+  providers: [StripeService],
+  exports: [StripeService],
+})
+export class StripeModule extends ConfigurableModuleClass {}
+```
+
+Step 3 : Simply pass down the configs as we did last time for provider module in the app.module.ts
+
+```
+StripeModule.forRootAsync({
+  imports : [ConfigModule],
+  inject : [ConfigService],
+  useFactory : (config:ConfigService) => {
+    return {
+      apiKey : config.getOrThrow<string>('STRIPE_SECRET_KEY'),
+    }
+  }
+  })]
+```
