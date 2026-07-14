@@ -1,241 +1,143 @@
-# Providors
+# Circular dependency
 
-## What is dependency injection container ?
+Circular dependency is a concept where we create a deadlock of our modules which are dependent on each technically.
+How ? : Module A -> Module B -> Module A
+Here module A is being imported in B but module B is also imported in module A, during the runtime we go into error where the module A can have import error ( import B as undefined ).
 
-Our whole NestJS compiles and creates an instance which has all the information about the services, modules, controllers, throughout thus where does it live ?
-
-In main.ts
-```
-app = await NestFactory.create(AppModule);
-```
-This line creates a DI container so we can register our modules, controllers, services, etc..
-
-## Importance of DI container ?
-
-It is the most basic thing our NestJS application has because every single module registration , instances serving , services and all are served from this initial point.
-
-### Providers 
-
-When we have all our modules, services , controllers so we need to register them into the DI container thus to do that we have dependencies which can be injected into our container and this is handled by NestJS at runtime.
-
-### Providers example
-
-We usually inject the dependency inside a constructor and call it when we need it.
-
-private readonly prismaService: PrismaService;
+Let us see how it looks ?
 
 ```
-constructor(private readonly prismaService: PrismaService) {}
-```
-
-### Standard Provider
-
-Properties of providers
-1. Token : Reference we would use to call the provider ( inject the provider )
-2. useClass : Class that has the value for token ( usually supplies via instantiating a class )
+file.module.ts
 
 @Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[{
-        provide : BookingsService, // token
-        useClass: BookingsService  // class
-    }]
+  imports : [BookingModule],
+  providers: [FileService]
 })
-export class BookingsModule {}
-+
-
-### Value Provider
-
-When you want to inject a contant value we use the value provider
-Here we have a token and static value that we would use as we want.
-
-```
-@Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[BookingsService,
-        {
-        provide : 'APP_PORT',     // token 
-        useValue : '8080' // value
-    }
-    ]
-})
-export class BookingsModule {}
-```
-
-Here is the idea of how we can inject it and use it as a value
-
-```
-export class BookingsController {
-    constructor(private readonly bookingsService: BookingsService,
-    // inject the token and we can get the value ( simpol )
-        @Inject('APP_PORT') private readonly appPort: string
-    ){}
+export class FileModule {
+  constructor(private readonly bookingService: BookingService){}
 }
 ```
 
-### Non class token
-
-
-When the providers key is not a class but a value of string or symbol is called non class token.
-
 ```
+bookings.module.ts
+
 @Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[BookingsService,
-    {
-        provide : 'PORT',               // token
-        useValue : process.env.PORT     // value
-    }
-    ]
+  imports : [FileModule],
+  providers: [BookingsService]
 })
-export class BookingsModule {}
-```
-
-How do we it inject it ?
-```
-export class BookingsController {
-
-    constructor(private readonly bookingsService: BookingsService,
-        @Inject('PORT') private readonly port:string
-    ){}
+export class BookingsModule {
+  constructor(private readonly fileService: FileService){}
 }
 ```
 
-### Class Providers
+Now this is what circular dependency looks like!
 
-We generally provide the token value as a class but also When you want to swap the service implementations at startup we can use conditionals.
+FileModule -> BookingsModule -> FileModule
+
+Now to fix this issue we have two ways 
+
+| Concept | Description |
+| :--- | :--- |
+| **forwardRef** | We create a closure and inside the arrow function we have our dependency |
+| **Shared Module** | We create a separate file or module which contains things in common with business logic needed similar to the original with precautions like guards |
+
+How we use forwardRef ?
+Usually the thing which is undefined is dependent on what is the initial point of our execution
+ex : A -> B -> A , here A is initial point thus B is importing A ( A is paused btw still waiting for B ), B tries to get A but as we know it is paused then it will throw A is undefined ( import error )
+
+**NOTE** : We must use forwardRef on both sides as well export the missing services.
 
 ```
+bookings.module.ts ( if this is entry point then FileModule needs to be in closure )
+
 @Module({
-    imports:[PrismaModule],
+    imports:[forwardRef(() => FileModule)],
     controllers:[BookingsController],
-    providers:[
-        {
-        provide : 'APP_PORT',
-        useValue : '8080'
-    },
-    {
-        provide : 'PORT',
-        useValue : process.env.PORT
-    },
-    {
-        provide : BookingsService,                                      //token
-        useClass : isProd ? BookingsService : MockBookingService        //value
-    }
-    ]
-})
-export class BookingsModule {}
+    providers:[BookingsService],
+    exports:[BookingsService]
 ```
 
-### Factory Providers
-
-When we want value that is built dynamically which is independent , async work , we simply inject the service and hand over the value.
-
-useFactory can:  run logic  •  await async  •  pull in deps via `inject`
-
 ```
+file.module.ts
+
 @Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[
-    {
-        provide : 'BOOKING_STATS',                                  // token
-        useFactory : async (prisma: PrismaService) => {
-            if(!isProd) return { total : 0 , note : 'mocked db' }   // value
-            const total = await prisma.bookings.count();
-            return { total , note : 'computed at startup' };
-        },
-        inject : [PrismaService],
-    },
-    ]
-})
-export class BookingsModule {}
+    imports:[forwardRef(() => BookingsModule)],
+    controllers:[FileController],
+    providers:[FileService],
+    exports:[FileService]
 ```
 
-How we inject it ?
-Simply inject the token & you get the value.
+This makes our NodeJS aware about the undefined in the parsing stage so that while runtime our NestJS then takes over the codebase and has the control over dependency resolution.
+
+### Don't you think this forwardRef is little fishy here ?
+
+1. Compiler wants to warn you but the use of forwardRef doesn't notify any architectural flaw caused by circular dependency.
+2. Unit testing would be hectic here as we face same issue of circular dependency while testing
+3. Scaling nightmare , scalable architecture has dependencies flow downwards but here we break the foundation and come back to monolith tied knot
+4. This is a temporary fix but can be nightmare in longetivity thus only suitable for hotfixes.
+
+### SharedModule ( Pure fix for circular dependency )
+
+Simple and straight forward, we create a module that would share the services , business logics , etc... thus not creating a deadlock and we make sure that a developer create the shared module as single truth of source for that specific business logic breaking the circular dependency
+
+FileModule -> SharedModule <- BookingsModule
+
+We do not make it a GOD Module remember that because it might cause a huge trouble for us later in future with complex architecture , huge lines of code , makes our app more look like a slop than a scalable architectured backend.
+
+Also the flow is maintained by flowing downward like 
+1. FileModule -> imports -> SharedModule
+2. BookingsModule -> imports -> SharedModule
+
+Practically we don't write a GOD file so for separate serving purposes we have separate modules
+ex : for booking receipt we use StorageCoreModule that would handle the booking receipts
+Simple import in the File module
 
 ```
-@Controller('bookings')
-export class BookingsController {
+storage-core.service.ts
 
-    constructor(private readonly bookingsService: BookingsService,
-        @Inject('BOOKING_STATS') private readonly stats : { total : number, note : string },
-    ){}
-
-    @Get('stats/all')
-    getStats() {
-        return this.stats;
+@Injectable()
+export class StorageCoreService {
+    getBookingReceipt(){
+        return "Booking receipt business logic"
     }
+}
 ```
-
-### Alias Providers
-
-When we want to use the same instance with different token name.
-All the token names resolve to the same instance so no duplication.
-
+Importing in file module
 ```
+file.module.ts
+
 @Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[
-        {
-        provide : BookingsService,
-        useClass : isProd ? BookingsService : MockBookingService
-    },
-    {
-        provide : 'BOOKING_ALIAS',      // token
-        useExisting : BookingsService   // value
-    }
-    ]
+  imports : [StorageCoreModule],
+  providers: [FileService]
 })
-export class BookingsModule {}
+export class FileModule {
+  constructor(private readonly storageService: StorageCoreService){}
+}
 ```
 
-So here it can be confusing like if we have MockBookingService then it won't be pointing to same instance but no it is not how it works
-
-In useExisting we actually create a token to refer the instance
-here , if the BookingService is : MockBooking then the 'BOOKING_ALIAS' would point to the value of token BookingService in short.
-
-  (alias token)      (target token)       (actual value)
-'BOOKING_ALIAS'  ->  BookingService ->  MockBookingService
-
-### Custom Providers
-
-When we need to export the provider we can export it using exports array where we pass the token name inside it as a reference.
+and for booking status we use AuditCoreService
 
 ```
+audit-core.service.ts
+
+@Injectable()
+export class AuditCoreService {
+    getBookingStatus(){
+        return "Booking status business logic";
+    }
+}
+```
+Importing in booking module
+```
+bookings.module.ts
+
 @Module({
-    imports:[PrismaModule],
-    controllers:[BookingsController],
-    providers:[
-    {
-        provide : BookingsService,
-        useClass : isProd ? BookingsService : MockBookingService
-    },
-    {
-        provide : 'BOOKING_STATS',
-        useFactory : async (prisma: PrismaService) => {
-            if(!isProd) return { total : 0 , note : 'mocked db' }
-            const total = await prisma.bookings.count();
-            return { total , note : 'computed at startup' };
-        },
-        inject : [PrismaService],
-    }
-    ],
-    exports : ['BOOKING_STATS'],
+  imports : [AuditCoreModule],
+  providers: [BookingsService]
 })
-export class BookingsModule {}
+export class BookingsModule {
+  constructor(private readonly auditService: AuditCoreService){}
+}
 ```
 
-If we want to inject it in another module we must import that module in particular and inject it as we used to do using the inject.
-
-```
-constructor(
-    @Inject('BOOKING_STATS') private readonly stats: { total: number; note: string }
-) {}
-```
-now it is not just a provider but related to our core module.
+**CRITICAL ENCAPSULATION RULE** : You do not import services; you import modules. If Module A needs a service from Module B, Module B must explicitly place that service into its exports array. If it is only in the providers array, the service remains permanently locked inside Module B, and your application will crash on boot.
