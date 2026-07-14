@@ -4,11 +4,12 @@ import { BookingsService } from './bookings.service';
 import { PrismaModule } from 'src/prisma/prisma.module';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MockBookingService } from './booking.mock.service';
+import { AuditCoreModule } from 'src/audit-core/audit-core.module';
 
 const isProd = process.env.NODE_ENV === 'production';
 
 @Module({
-    imports:[PrismaModule],
+    imports:[PrismaModule,AuditCoreModule],
     controllers:[BookingsController],
     providers:[
         {
@@ -37,6 +38,6 @@ const isProd = process.env.NODE_ENV === 'production';
         useExisting : BookingsService
     }
     ],
-    exports : ['BOOKING_STATS'],
+    exports : ['BOOKING_STATS',BookingsService],
 })
 export class BookingsModule {}
