@@ -10,11 +10,20 @@ Let us see how it looks ?
 file.module.ts
 
 @Module({
-  imports : [BookingModule],
-  providers: [FileService]
+  imports : [BookingsModule],
+  providers: [FileService],
+  exports: [FileService],
+  controllers: [FileController]
 })
-export class FileModule {
-  constructor(private readonly bookingService: BookingService){}
+export class FileModule {}
+```
+
+```
+file.controller.ts
+
+@Controller('file')
+export class FileController {
+  constructor(private readonly bookingService: BookingsService){}
 }
 ```
 
@@ -23,10 +32,22 @@ bookings.module.ts
 
 @Module({
   imports : [FileModule],
-  providers: [BookingsService]
+  providers: [BookingsService],
+  exports: [BookingsService],
+  controllers:[BookingsController],
 })
-export class BookingsModule {
-  constructor(private readonly fileService: FileService){}
+export class BookingsModule {}
+```
+
+```
+bookings.controller.ts
+
+@Controller('bookings')
+export class BookingsController {
+
+  constructor(
+    private readonly fileService:FileService
+  ){}
 }
 ```
 
@@ -102,15 +123,34 @@ export class StorageCoreService {
     }
 }
 ```
+
+```
+storage-core.module.ts
+
+@Module({
+  imports : [],
+  providers: [StorageCoreService],
+  exports: [StorageCoreService]
+})
+export class StorageCoreModule {}
+```
 Importing in file module
 ```
 file.module.ts
 
 @Module({
   imports : [StorageCoreModule],
-  providers: [FileService]
+  providers: [FileService],
+  controllers: [FileController]
 })
-export class FileModule {
+export class FileModule {}
+```
+
+```
+file.controller.ts
+
+@Controller('file')
+export class FileController {
   constructor(private readonly storageService: StorageCoreService){}
 }
 ```
@@ -127,16 +167,38 @@ export class AuditCoreService {
     }
 }
 ```
+
+```
+audit-core.module.ts
+
+@Module({
+  providers: [AuditCoreService],
+  exports: [AuditCoreService]
+})
+export class AuditCoreModule {}
+```
 Importing in booking module
 ```
 bookings.module.ts
 
 @Module({
   imports : [AuditCoreModule],
-  providers: [BookingsService]
+  providers: [BookingsService],
+  controllers : [BookingsController]
 })
 export class BookingsModule {
-  constructor(private readonly auditService: AuditCoreService){}
+}
+```
+
+```
+bookings.controller.ts
+
+@Controller('bookings')
+export class BookingsController {
+
+  constructor(
+    private readonly bookingStats:AuditCoreService
+  ){}
 }
 ```
 
