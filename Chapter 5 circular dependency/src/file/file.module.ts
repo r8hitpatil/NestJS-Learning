@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { FileService } from './file.service';
 import { StorageCoreModule } from 'src/storage-core/storage-core.module';
-import { StorageCoreService } from 'src/storage-core/storage-core.service';
+import { FileController } from './file.controller';
 
 @Module({
   imports : [StorageCoreModule],
-  providers: [FileService]
+  providers: [FileService],
+  controllers: [FileController]
 })
-export class FileModule {
-  constructor(private readonly storageService: StorageCoreService){}
-}
+export class FileModule {}

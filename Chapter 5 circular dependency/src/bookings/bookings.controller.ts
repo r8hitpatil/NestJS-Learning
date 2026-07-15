@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Inject, Param, Post } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { BookingParamDto, CreateBookingDto, UpdateBookingsDto } from './dto';
+import { AuditCoreService } from 'src/audit-core/audit-core.service';
 
 @Controller('bookings')
 export class BookingsController {
@@ -9,7 +10,8 @@ export class BookingsController {
         @Inject('APP_PORT') private readonly appPort: string,
         @Inject('PORT') private readonly port:string,
         @Inject('BOOKING_STATS') private readonly stats : { total : number, note : string },
-        @Inject('BOOKING_ALIAS') private readonly aliasService:BookingsService
+        @Inject('BOOKING_ALIAS') private readonly aliasService:BookingsService,
+        private readonly bookingStats:AuditCoreService
     ){}
 
     @Get('alias/check')
